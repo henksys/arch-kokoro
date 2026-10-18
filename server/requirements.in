@@ -1,0 +1,6 @@
+# Runtime Python dependencies for the local Kokoro TTS server.
+# The fully pinned versions live in requirements.txt, which is what the
+# installer actually uses. This file is the human-edited source of truth.
+kokoro-onnx==0.6.1
+fastapi>=0.115,<1
+uvicorn>=0.32,<1

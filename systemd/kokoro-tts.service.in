@@ -1,0 +1,57 @@
+[Unit]
+# Human-readable name for the service.
+Description=Kokoro TTS API (OpenAI-compatible, CPU-only)
+# Point systemd at the project documentation.
+Documentation=file://__PROJECT_DIR__/README.md
+# Start after the network is available so the service can bind its socket.
+After=network-online.target
+# Ask systemd to pull in the network-online target.
+Wants=network-online.target
+
+[Service]
+# Run a normal foreground process; uvicorn stays in the foreground.
+Type=simple
+# Start the Python process from the server directory.
+WorkingDirectory=__PROJECT_DIR__/server
+# Load all Kokoro settings from the user-owned environment file.
+EnvironmentFile=__CONFIG_FILE__
+# Make Python logs appear immediately in the journal.
+Environment=PYTHONUNBUFFERED=1
+# Keep the read-only project tree free of __pycache__ writes.
+Environment=PYTHONDONTWRITEBYTECODE=1
+# Disable ONNX Runtime's optional Microsoft telemetry.
+Environment=ORT_DISABLE_TELEMETRY=1
+# Run the server with the virtual environment's Python.
+ExecStart=__VENV_DIR__/bin/python __PROJECT_DIR__/server/app.py
+# Restart automatically after crashes, but not after a clean stop.
+Restart=on-failure
+# Wait two seconds between restart attempts.
+RestartSec=2
+# Give uvicorn time to stop cleanly.
+TimeoutStopSec=10
+# Never allow the service to gain extra privileges.
+NoNewPrivileges=yes
+# Give the process a private /tmp directory.
+PrivateTmp=yes
+# Make the system directories read-only for this service.
+ProtectSystem=strict
+# Make the home directory read-only, except for the runtime directory below.
+ProtectHome=read-only
+# Allow writes only to the model/venv runtime directory.
+ReadWritePaths=__RUNTIME_DIR__
+# Restrict network families to IPv4, IPv6, and Unix sockets.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Prevent personality changes.
+LockPersonality=yes
+# Protect kernel tunables.
+ProtectKernelTunables=yes
+# Protect kernel module loading.
+ProtectKernelModules=yes
+# Protect the cgroup hierarchy.
+ProtectControlGroups=yes
+# Create files with private permissions.
+UMask=0077
+
+[Install]
+# Start the service when the user's systemd manager reaches its default target.
+WantedBy=default.target

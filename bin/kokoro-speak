@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# kokoro-speak - speak text through the local Kokoro TTS API
+# ==============================================================================
+# Usage:
+#   kokoro-speak "Hello from my agent"
+#   echo "Hello from a pipe" | kokoro-speak
+#   kokoro-speak --voice am_michael --speed 0.9 "A slower male voice"
+#   kokoro-speak --format wav --output /tmp/speech.wav "Save a WAV file"
+#   kokoro-speak --no-play "Hello"     # save to a temporary file and print path
+#
+# Options:
+#   --voice NAME      Kokoro voice (default: af_sky, or KOKORO_DEFAULT_VOICE)
+#   --speed NUMBER    Speaking speed 0.25-4.0 (default: 1.0)
+#   --format FORMAT   mp3|wav|pcm|flac|opus|aac (default: mp3)
+#   --output FILE     Save to FILE instead of a temporary file
+#   --no-play         Do not play the audio; print the file path
+#   --url URL         API base URL including /v1 (default: http://127.0.0.1:8880/v1)
+#   --help            Show this help
+# ==============================================================================
+
+# Stop on errors, undefined variables, and failed pipeline stages.
+set -euo pipefail
+
+# Resolve the absolute path of this project directory.
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Locate the user configuration file.
+CONFIG_FILE="$HOME/.config/kokoro-tts/env"
+
+# Load the service configuration when it exists.
+if [ -f "$CONFIG_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$CONFIG_FILE"
+fi
+
+# Read the configured host, falling back to loopback.
+HOST="${KOKORO_HOST:-127.0.0.1}"
+
+# Convert a wildcard bind address into a loopback address for local use.
+if [ "$HOST" = "0.0.0.0" ] || [ "$HOST" = "::" ]; then
+  # The wildcard address is reachable through IPv4 loopback.
+  HOST="127.0.0.1"
+fi
+
+# Read the configured port, falling back to 8880.
+PORT="${KOKORO_PORT:-8880}"
+
+# Build the default API URL, including the /v1 prefix.
+BASE_URL="${KOKORO_SPEAK_URL:-http://$HOST:$PORT/v1}"
+
+# Read the default voice from the config, falling back to af_sky.
+VOICE="${KOKORO_DEFAULT_VOICE:-af_sky}"
+
+# Default speaking speed.
+SPEED="1.0"
+
+# Default output format.
+FORMAT="mp3"
+
+# Empty output path means "use a temporary file".
+OUTPUT=""
+
+# Play audio by default.
+PLAY="true"
+
+# Collect the text words so arguments can be quoted naturally.
+TEXT_PARTS=()
+
+# Parse all command-line options and text arguments.
+while [ "$#" -gt 0 ]; do
+  # Dispatch on the current argument.
+  case "$1" in
+    --voice)
+      # Use the next argument as the voice name.
+      VOICE="${2:?--voice requires a value}"
+      # Consume both arguments.
+      shift 2
+      ;;
+    --speed)
+      # Use the next argument as the speed.
+      SPEED="${2:?--speed requires a value}"
+      # Consume both arguments.
+      shift 2
+      ;;
+    --format)
+      # Use the next argument as the output format.
+      FORMAT="${2:?--format requires a value}"
+      # Consume both arguments.
+      shift 2
+      ;;
+    --output)
+      # Use the next argument as the output path.
+      OUTPUT="${2:?--output requires a value}"
+      # Consume both arguments.
+      shift 2
+      ;;
+    --no-play)
+      # Disable playback.
+      PLAY="false"
+      # Consume the option.
+      shift
+      ;;
+    --url)
+      # Override the API base URL.
+      BASE_URL="${2:?--url requires a value}"
+      # Consume both arguments.
+      shift 2
+      ;;
+    --help|-h)
+      # Print the header comments as help text.
+      sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      # Stop successfully.
+      exit 0
+      ;;
+    --)
+      # Everything after -- is text.
+      shift
+      # Add all remaining arguments to the text buffer.
+      TEXT_PARTS+=("$@")
+      # Leave the option loop.
+      break
+      ;;
+    -*)
+      # Reject unknown options.
+      printf 'Unknown option: %s\n' "$1" >&2
+      # Exit with a usage error.
+      exit 2
+      ;;
+    *)
+      # Treat everything else as text.
+      TEXT_PARTS+=("$1")
+      # Consume the word.
+      shift
+      ;;
+  esac
+done
+
+# Join the collected words into one text string.
+if [ "${#TEXT_PARTS[@]}" -gt 0 ]; then
+  # Join with single spaces.
+  TEXT="${TEXT_PARTS[*]}"
+else
+  # No arguments means read text from standard input.
+  TEXT="$(cat)"
+fi
+
+# Refuse to send an empty request.
+if [ -z "${TEXT//[[:space:]]/}" ]; then
+  # Explain the expected input.
+  printf 'No text provided. Pass text as arguments or pipe it on stdin.\n' >&2
+  # Exit with a usage error.
+  exit 2
+fi
+
+# Track whether the output file is temporary and should be removed after play.
+TEMP_FILE="false"
+
+# Create a temporary output file when the caller did not provide one.
+if [ -z "$OUTPUT" ]; then
+  # Create a unique temporary file with the correct extension.
+  OUTPUT="$(mktemp --suffix=".$FORMAT")"
+  # Remember that this file is temporary.
+  TEMP_FILE="true"
+fi
+
+# Build the JSON request body safely with jq.
+PAYLOAD="$(jq -n \
+  --arg model "kokoro" \
+  --arg input "$TEXT" \
+  --arg voice "$VOICE" \
+  --arg format "$FORMAT" \
+  --argjson speed "$SPEED" \
+  '{model:$model,input:$input,voice:$voice,response_format:$format,speed:$speed}')"
+
+# Build the request headers.
+CURL_HEADERS=(-H 'Content-Type: application/json')
+
+# Add the bearer token when the service requires one.
+if [ -n "${KOKORO_API_KEY:-}" ]; then
+  # Append the Authorization header.
+  CURL_HEADERS+=(-H "Authorization: Bearer $KOKORO_API_KEY")
+fi
+
+# Send the request and capture the HTTP status code separately from the body.
+HTTP_STATUS="$(curl -sS -o "$OUTPUT" -w '%{http_code}' "${CURL_HEADERS[@]}" -d "$PAYLOAD" "$BASE_URL/audio/speech")"
+
+# Treat any non-200 response as an error and show the server's JSON message.
+if [ "$HTTP_STATUS" != "200" ]; then
+  # Print the error body returned by the API.
+  cat "$OUTPUT"
+  # Add a newline for readability.
+  printf '\n'
+  # Remove the temporary error file.
+  rm -f "$OUTPUT"
+  # Exit with a failure status.
+  exit 1
+fi
+
+# Play the audio unless the caller asked for no playback.
+if [ "$PLAY" = "true" ]; then
+  # Raw PCM needs explicit format flags for ffplay.
+  if [ "$FORMAT" = "pcm" ]; then
+    # Play 24 kHz mono signed 16-bit PCM from the file.
+    ffplay -nodisp -autoexit -loglevel error -f s16le -ar 24000 -ac 1 "$OUTPUT"
+  elif command -v mpv >/dev/null 2>&1; then
+    # Prefer mpv for container formats because it handles all of them.
+    mpv --no-video --really-quiet "$OUTPUT"
+  elif command -v ffplay >/dev/null 2>&1; then
+    # Fall back to ffplay when mpv is unavailable.
+    ffplay -nodisp -autoexit -loglevel error "$OUTPUT"
+  else
+    # If no player exists, tell the user where the audio was saved.
+    printf 'Audio saved to %s\n' "$OUTPUT"
+  fi
+else
+  # In no-play mode, print the path so callers can use the file.
+  printf '%s\n' "$OUTPUT"
+fi
+
+# Remove the temporary file after successful playback.
+if [ "$TEMP_FILE" = "true" ] && [ "$PLAY" = "true" ]; then
+  # Delete the temporary audio file.
+  rm -f "$OUTPUT"
+fi

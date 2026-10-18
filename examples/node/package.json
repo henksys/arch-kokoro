@@ -1,0 +1,17 @@
+{
+  "name": "kokoro-node-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "speak": "tsx speak.ts",
+    "stream": "tsx stream.ts"
+  },
+  "dependencies": {
+    "openai": "^7.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.0"
+  }
+}
