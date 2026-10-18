@@ -1,7 +1,7 @@
-# Integrating Kokoro TTS into an existing agent
+# Integrating Kokoro TTS into an existing Node.js agent
 
 This is a short implementation brief for a coding agent that needs to add
-speech output to an existing Node/TypeScript agent.
+speech output to an existing **JavaScript** project running on Node.js.
 
 The TTS service is **already installed and running**. Do not reimplement TTS,
 do not install another model, and do not call the `kokoro-speak` CLI.
@@ -32,41 +32,53 @@ npm install openai
 The agent also needs `ffplay`, which is part of `ffmpeg` and is already
 installed on Omarchy.
 
-## Drop-in TypeScript module
+## Choose the module system
 
-Create `src/tts/kokoro.ts`:
+The example below uses **ES modules** (`import` / `export`). If `package.json`
+contains `"type": "module"`, or the project already uses `import`, use it as-is.
 
-```ts
+If the project uses **CommonJS** (`require` / `module.exports`), apply the
+conversion shown after the class.
+
+## Drop-in JavaScript module
+
+Create `src/tts/kokoro.js`:
+
+```js
 import OpenAI from "openai";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-export interface SpeakOptions {
-  voice?: string;
-  speed?: number;
-}
+/**
+ * @typedef {Object} SpeakOptions
+ * @property {string} [voice]
+ * @property {number} [speed]
+ */
 
 export class KokoroTTS {
-  private readonly client: OpenAI;
-  private controller: AbortController | null = null;
-  private player: ChildProcess | null = null;
-
   constructor() {
     this.client = new OpenAI({
       baseURL: process.env.KOKORO_BASE_URL ?? "http://127.0.0.1:8880/v1",
       apiKey: process.env.KOKORO_API_KEY || "not-needed",
     });
+    this.controller = null;
+    this.player = null;
   }
 
-  stop(): void {
+  stop() {
     this.controller?.abort();
     this.player?.kill("SIGTERM");
     this.controller = null;
     this.player = null;
   }
 
-  async speak(text: string, options: SpeakOptions = {}): Promise<void> {
+  /**
+   * @param {string} text
+   * @param {SpeakOptions} [options]
+   * @returns {Promise<void>}
+   */
+  async speak(text, options = {}) {
     const clean = text.trim();
     if (!clean) return;
 
@@ -111,9 +123,9 @@ export class KokoroTTS {
         throw new Error("Could not open ffplay stdin");
       }
 
-      const source = Readable.fromWeb(response.body as never);
+      const source = Readable.fromWeb(response.body);
 
-      const playerDone = new Promise<void>((resolve, reject) => {
+      const playerDone = new Promise((resolve, reject) => {
         player.once("error", reject);
         player.once("close", (code) => {
           if (code === 0) resolve();
@@ -136,9 +148,43 @@ export class KokoroTTS {
 }
 ```
 
+## CommonJS variant
+
+If the project uses CommonJS, replace the four import lines with:
+
+```js
+const OpenAI = require("openai");
+const { spawn } = require("node:child_process");
+const { Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
+```
+
+Then change:
+
+```js
+export class KokoroTTS
+```
+
+to:
+
+```js
+class KokoroTTS
+```
+
+and add this at the end of the file:
+
+```js
+module.exports = { KokoroTTS };
+```
+
+The class body and JSDoc types stay the same. The OpenAI package supports both
+ESM and CommonJS.
+
 ## Use it in the agent
 
-```ts
+ES modules:
+
+```js
 import { KokoroTTS } from "./tts/kokoro.js";
 
 const tts = new KokoroTTS();
@@ -149,9 +195,26 @@ await tts.speak("Hello, I am your local voice agent.", {
 });
 ```
 
+CommonJS:
+
+```js
+const { KokoroTTS } = require("./tts/kokoro.js");
+
+async function main() {
+  const tts = new KokoroTTS();
+
+  await tts.speak("Hello, I am your local voice agent.", {
+    voice: "af_sky",
+    speed: 1.0,
+  });
+}
+
+main();
+```
+
 Interrupt current speech:
 
-```ts
+```js
 tts.stop();
 ```
 
@@ -215,7 +278,7 @@ choice for real-time speech.
 
 Example sentence splitting:
 
-```ts
+```js
 const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [text];
 
 for (const sentence of sentences) {
