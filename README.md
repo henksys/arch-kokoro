@@ -266,6 +266,10 @@ For buffered playback, streaming PCM, and barge-in examples, see
 [docs/NODE.md](docs/NODE.md) and the files in
 [examples/node/](examples/node/).
 
+If another coding agent is going to add speech to an existing project, give it
+[docs/AGENT.md](docs/AGENT.md). It contains a ready-to-paste TypeScript module,
+the raw API contract, barge-in guidance, and a test checklist.
+
 To run the included examples:
 
 ```bash
