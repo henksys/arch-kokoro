@@ -88,7 +88,7 @@ const player = spawn("ffplay", [
   "-loglevel", "error",
   "-f", "s16le",
   "-ar", "24000",
-  "-ac", "1",
+  "-ch_layout", "mono",
   "-",
 ]);
 
@@ -104,7 +104,7 @@ npm run stream -- "This is streamed as it is generated."
 ```
 
 For MP3 streaming, use `response_format: "mp3"` and remove the
-`-f s16le -ar 24000 -ac 1` flags from ffplay. PCM avoids MP3 encoding latency,
+`-f s16le -ar 24000 -ch_layout mono` flags from ffplay. PCM avoids MP3 encoding latency,
 so it is the better choice for real-time agents.
 
 ## Barge-in / interruption
@@ -170,7 +170,7 @@ export async function speak(
     "-loglevel", "error",
     "-f", "s16le",
     "-ar", "24000",
-    "-ac", "1",
+    "-ch_layout", "mono",
     "-",
   ]);
 

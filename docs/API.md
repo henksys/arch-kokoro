@@ -197,7 +197,7 @@ curl -sS http://127.0.0.1:8880/v1/audio/speech \
     "stream_format": "audio"
   }' \
   | ffplay -nodisp -autoexit -loglevel error \
-      -f s16le -ar 24000 -ac 1 -
+      -f s16le -ar 24000 -ch_layout mono -
 ```
 
 ### SSE stream

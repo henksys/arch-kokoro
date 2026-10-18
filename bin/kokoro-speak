@@ -202,7 +202,7 @@ if [ "$PLAY" = "true" ]; then
   # Raw PCM needs explicit format flags for ffplay.
   if [ "$FORMAT" = "pcm" ]; then
     # Play 24 kHz mono signed 16-bit PCM from the file.
-    ffplay -nodisp -autoexit -loglevel error -f s16le -ar 24000 -ac 1 "$OUTPUT"
+    ffplay -nodisp -autoexit -loglevel error -f s16le -ar 24000 -ch_layout mono "$OUTPUT"
   elif command -v mpv >/dev/null 2>&1; then
     # Prefer mpv for container formats because it handles all of them.
     mpv --no-video --really-quiet "$OUTPUT"

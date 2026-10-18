@@ -60,8 +60,8 @@ const player = spawn("ffplay", [
   "s16le",
   "-ar",
   "24000",
-  "-ac",
-  "1",
+  "-ch_layout",
+  "mono",
   "-",
 ]);
 
