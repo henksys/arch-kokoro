@@ -416,7 +416,7 @@ in your normal desktop session avoids this issue.
   ffmpeg's `atempo`, so the OpenAI `0.25–4.0` range is accepted.
 - `instructions` is accepted for compatibility but ignored; Kokoro has no
   instruction-following control.
-- On this 16-core machine with four ONNX threads, a 3.2-second utterance took
+- On a 16-core machine with four ONNX threads, a 3.2-second utterance took
   about 1.4 seconds of wall time. Raise `KOKORO_THREADS` for lower latency or
   lower it to leave more CPU for the rest of your agent.
 
