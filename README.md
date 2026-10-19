@@ -1,6 +1,6 @@
 # arch-kokoro
 
-**Lean CPU-only Kokoro TTS for Arch Linux / Omarchy, running at user level with
+**Lean CPU-only Kokoro TTS install script for Arch Linux / Omarchy, running at user level with
 a systemd user service.**
 
 A small, local text-to-speech service based on
