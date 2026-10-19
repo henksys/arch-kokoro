@@ -38,7 +38,7 @@ The installer does **not** install system packages. Omarchy already provides
 `ffmpeg`, `ffprobe`, `curl`, and `jq`. If one is missing, the installer stops
 and tells you which package to install.
 
-### Measured footprint on this machine
+### Measured footprint on a testing machine
 
 - Python virtual environment: about 162 MB
 - Int8 model + 54 voices: about 136 MB
